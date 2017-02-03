@@ -43,6 +43,9 @@ const monitorSocket = "monitor.sock"
 type stateString string
 
 const (
+	// stateCreated represents a pod/container that's just been created.
+	stateCreated stateString = "created"
+
 	// stateReady represents a pod/container that's ready to be run
 	stateReady stateString = "ready"
 
@@ -77,6 +80,11 @@ func (state *State) validTransition(oldState stateString, newState stateString) 
 	}
 
 	switch state.State {
+	case stateCreated:
+		if newState == stateRunning {
+			return nil
+		}
+
 	case stateReady:
 		if newState == stateRunning {
 			return nil
@@ -337,7 +345,7 @@ func (p *Pod) ID() string {
 }
 
 func (p *Pod) createSetStates() error {
-	err := p.setPodState(stateReady)
+	err := p.setPodState(stateCreated)
 	if err != nil {
 		return err
 	}
@@ -470,7 +478,7 @@ func (p *Pod) delete() error {
 		return err
 	}
 
-	if state.State != stateReady {
+	if state.State != stateCreated && state.State != stateReady {
 		return fmt.Errorf("Pod not ready, impossible to delete")
 	}
 
@@ -490,7 +498,10 @@ func (p *Pod) startCheckStates() error {
 
 	err = state.validTransition(stateReady, stateRunning)
 	if err != nil {
-		return err
+		err = state.validTransition(stateCreated, stateRunning)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = p.checkContainersState(stateReady)
@@ -547,6 +558,24 @@ func (p *Pod) startVM() error {
 	return nil
 }
 
+func (p *Pod) checkPodStarted() (bool, error) {
+	state, err := p.storage.fetchPodState(p.id)
+	if err != nil {
+		return false, err
+	}
+
+	if state.State != stateCreated {
+		return true, nil
+	}
+
+	err = p.setPodState(stateReady)
+	if err != nil {
+		return false, err
+	}
+
+	return false, nil
+}
+
 // start starts a pod. The containers that are making the pod
 // will be started.
 func (p *Pod) start() error {
@@ -557,7 +586,6 @@ func (p *Pod) start() error {
 
 	err = p.agent.startPod(*p.config)
 	if err != nil {
-		p.stop()
 		return err
 	}
 

@@ -242,7 +242,12 @@ func (h *hyper) init(pod *Pod, config interface{}) error {
 // start is the agent starting implementation for hyperstart.
 // It does nothing.
 func (h *hyper) startAgent() error {
-	return nil
+	_, err := h.proxy.register(*(h.pod))
+	if err != nil {
+		return err
+	}
+
+	return h.proxy.disconnect()
 }
 
 // exec is the agent command execution implementation for hyperstart.
@@ -277,36 +282,51 @@ func (h *hyper) exec(pod Pod, container Container, cmd Cmd) error {
 
 // startPod is the agent Pod starting implementation for hyperstart.
 func (h *hyper) startPod(config PodConfig) error {
-	h.pod.containers = append(h.pod.containers, ContainerConfig{})
-
-	ioStreams, err := h.proxy.register(*(h.pod))
+	_, err := h.proxy.connect(*(h.pod))
 	if err != nil {
 		return err
 	}
 
-	hyperPod := hyperJson.Pod{
-		Hostname:             config.ID,
-		DeprecatedContainers: []hyperJson.Container{},
-		ShareDir:             mountTag,
-	}
-
-	proxyCmd := hyperstartProxyCmd{
-		cmd:     hyperstart.StartPod,
-		message: hyperPod,
-	}
-
-	_, err = h.proxy.sendCmd(proxyCmd)
+	podStarted, err := h.pod.checkPodStarted()
 	if err != nil {
 		return err
 	}
 
-	err = h.startPauseContainer(*(h.pod), ioStreams[0])
-	if err != nil {
-		return err
+	if podStarted == false {
+		hyperPod := hyperJson.Pod{
+			Hostname:             config.ID,
+			DeprecatedContainers: []hyperJson.Container{},
+			ShareDir:             mountTag,
+		}
+
+		proxyCmd := hyperstartProxyCmd{
+			cmd:     hyperstart.StartPod,
+			message: hyperPod,
+		}
+
+		_, err = h.proxy.sendCmd(proxyCmd)
+		if err != nil {
+			return err
+		}
+
+		ioStream, err := h.proxy.connect(*(h.pod))
+		if err != nil {
+			return err
+		}
+
+		err = h.startPauseContainer(*(h.pod), ioStream)
+		if err != nil {
+			return err
+		}
 	}
 
-	for idx, c := range config.Containers {
-		err := h.startOneContainer(*(h.pod), c, ioStreams[idx+1])
+	for _, c := range config.Containers {
+		ioStream, err := h.proxy.connect(*(h.pod))
+		if err != nil {
+			return err
+		}
+
+		err = h.startOneContainer(*(h.pod), c, ioStream)
 		if err != nil {
 			return err
 		}
@@ -338,28 +358,23 @@ func (h *hyper) stopPod(pod Pod) error {
 		}
 	}
 
-	err = h.stopPauseContainer()
-	if err != nil {
-		return err
-	}
-
-	err = h.proxy.unregister(pod)
-	if err != nil {
-		return err
-	}
-
-	err = h.proxy.disconnect()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return h.proxy.disconnect()
 }
 
 // stop is the agent stopping implementation for hyperstart.
 // It does nothing.
 func (h *hyper) stopAgent() error {
-	return nil
+	_, err := h.proxy.connect(*(h.pod))
+	if err != nil {
+		return err
+	}
+
+	err = h.proxy.unregister(*(h.pod))
+	if err != nil {
+		return err
+	}
+
+	return h.proxy.disconnect()
 }
 
 // startPauseContainer starts a specific container running the pause binary provided.
@@ -445,30 +460,6 @@ func (h *hyper) startContainer(pod Pod, contConfig ContainerConfig) error {
 	}
 
 	return h.proxy.disconnect()
-}
-
-func (h *hyper) stopPauseContainer() error {
-	killCmd := KillCommand{
-		Container: pauseContainerName,
-		Signal:    syscall.SIGKILL,
-	}
-
-	proxyCmd := hyperstartProxyCmd{
-		cmd:     hyperstart.KillContainer,
-		message: killCmd,
-	}
-
-	_, err := h.proxy.sendCmd(proxyCmd)
-	if err != nil {
-		return err
-	}
-
-	err = h.unlinkPauseBinary()
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // stopContainer is the agent Container stopping implementation for hyperstart.

@@ -205,11 +205,6 @@ func (c *Container) start() error {
 		return err
 	}
 
-	err = c.pod.agent.startAgent()
-	if err != nil {
-		return err
-	}
-
 	err = c.pod.agent.startContainer(*c.pod, *(c.config))
 	if err != nil {
 		c.stop()
@@ -248,11 +243,6 @@ func (c *Container) stop() error {
 		return err
 	}
 
-	err = c.pod.agent.startAgent()
-	if err != nil {
-		return err
-	}
-
 	err = c.pod.agent.stopContainer(*c.pod, *c)
 	if err != nil {
 		return err
@@ -283,11 +273,6 @@ func (c *Container) enter(cmd Cmd) error {
 
 	if state.State != stateRunning {
 		return fmt.Errorf("Container not running, impossible to enter")
-	}
-
-	err = c.pod.agent.startAgent()
-	if err != nil {
-		return err
 	}
 
 	err = c.pod.agent.exec(*c.pod, *c, cmd)
