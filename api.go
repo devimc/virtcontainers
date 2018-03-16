@@ -653,3 +653,34 @@ func ProcessListContainer(podID, containerID string, options ProcessListOptions)
 
 	return c.processList(options)
 }
+
+// UpdateContainer is the virtcontainers entry point to update
+// a running container
+func UpdateContainer(podID, containerID string, resources ContainerResources) error {
+	if podID == "" {
+		return errNeedPodID
+	}
+
+	if containerID == "" {
+		return errNeedContainerID
+	}
+
+	lockFile, err := rLockPod(podID)
+	if err != nil {
+		return err
+	}
+	defer unlockPod(lockFile)
+
+	p, err := fetchPod(podID)
+	if err != nil {
+		return err
+	}
+
+	// Fetch the container.
+	c, err := p.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	return c.updateResources(resources)
+}

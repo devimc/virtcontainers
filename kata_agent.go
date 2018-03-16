@@ -774,6 +774,11 @@ func (k *kataAgent) processListContainer(pod Pod, c Container, options ProcessLi
 	return nil, nil
 }
 
+func (k *kataAgent) updateContainer(pod Pod, c Container, resources ContainerResources) error {
+	//TODO: implement
+	return nil
+}
+
 func (k *kataAgent) connect() error {
 	if k.client != nil {
 		return nil

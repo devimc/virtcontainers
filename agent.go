@@ -172,4 +172,7 @@ type agent interface {
 
 	// processListContainer will list the processes running inside the container
 	processListContainer(pod Pod, c Container, options ProcessListOptions) (ProcessList, error)
+
+	// updateContainer will update container's resources
+	updateContainer(pod Pod, c Container, resources ContainerResources) error
 }

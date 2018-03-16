@@ -79,3 +79,8 @@ func (n *noopAgent) killContainer(pod Pod, c Container, signal syscall.Signal, a
 func (n *noopAgent) processListContainer(pod Pod, c Container, options ProcessListOptions) (ProcessList, error) {
 	return nil, nil
 }
+
+// updateContainer is the Noop agent Container update implementation. It does nothing.
+func (n *noopAgent) updateContainer(pod Pod, c Container, resources ContainerResources) error {
+	return nil
+}

@@ -632,6 +632,11 @@ func (h *hyper) processListOneContainer(podID, cID string, options ProcessListOp
 	return msg, nil
 }
 
+func (h *hyper) updateContainer(pod Pod, c Container, resources ContainerResources) error {
+	//TODO: implement
+	return nil
+}
+
 // connectProxyRetry repeatedly tries to connect to the proxy on the specified
 // address until a timeout state is reached, when it will fail.
 func (h *hyper) connectProxyRetry(scheme, address string) (conn net.Conn, err error) {

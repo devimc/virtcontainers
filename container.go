@@ -812,3 +812,43 @@ func (c *Container) removeResources() error {
 
 	return nil
 }
+
+func (c *Container) updateResources(resources ContainerResources) error {
+	//TODO add support for memory, Issue: https://github.com/containers/virtcontainers/issues/578
+	if err := c.checkPodRunning("update"); err != nil {
+		return err
+	}
+
+	if c.state.State != StateRunning {
+		return fmt.Errorf("Container not running, impossible to update resources")
+	}
+
+	// Check if vCPUs need to be updated
+	newVCPUs := ConstraintsToVCPUs(resources.CPUQuota, resources.CPUPeriod)
+	if newVCPUs != 0 {
+		currentVCPUs := ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
+		vCPUs := int(currentVCPUs - newVCPUs)
+		if vCPUs < 0 {
+			// hot add more vCPUs
+			vCPUs = -vCPUs
+			virtLog.Debugf("hot adding %d vCPUs", vCPUs)
+			if err := c.pod.hypervisor.hotplugAddDevice(uint32(vCPUs), cpuDev); err != nil {
+				return err
+			}
+
+		} else if vCPUs > 0 {
+			// hot remove vCPUs
+			virtLog.Debugf("hot removing %d vCPUs", vCPUs)
+			if err := c.pod.hypervisor.hotplugRemoveDevice(uint32(vCPUs), cpuDev); err != nil {
+				return err
+			}
+		}
+	}
+
+	c.config.Resources = resources
+	if err := c.storeContainer(); err != nil {
+		return err
+	}
+
+	return c.pod.agent.updateContainer(*(c.pod), *c, resources)
+}
